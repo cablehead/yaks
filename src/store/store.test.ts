@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { createRoot, createSignal } from 'solid-js';
+import { describe, it, expect } from 'vitest';
+import { createRoot } from 'solid-js';
 import { createYakStore } from './index';
 import type { EventStreamInterface, Frame } from './types';
 
@@ -93,7 +93,7 @@ describe('Yak Store', () => {
               resolve();
               return;
             }
-          } catch (error) {
+          } catch {
             // Continue checking
           }
 
@@ -165,7 +165,7 @@ describe('Yak Store', () => {
                 clearTimeout(timeout);
                 resolve();
                 return;
-              } catch (error) {
+              } catch {
                 clearTimeout(timeout);
                 reject(error);
                 return;

@@ -3,7 +3,6 @@ import { EditorView, basicSetup } from 'codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { keymap } from '@codemirror/view';
-import { EditorSelection } from '@codemirror/state';
 
 interface EditorProps {
   isOpen: boolean;
@@ -155,7 +154,7 @@ export function Editor(props: EditorProps) {
               </div>
             </div>
           </div>
-          <div class="editor-content" ref={editorContainer}></div>
+          <div class="editor-content" ref={editorContainer} />
         </div>
       </div>
     </Show>
