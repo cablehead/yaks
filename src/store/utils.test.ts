@@ -19,34 +19,34 @@ function scru128ToHumanTime(id: string): string {
 describe('Store Utils', () => {
   describe('getFirstLine', () => {
     it('should extract the first line from content', () => {
-      const content = "First line\nSecond line\nThird line";
-      expect(getFirstLine(content)).toBe("First line");
+      const content = 'First line\nSecond line\nThird line';
+      expect(getFirstLine(content)).toBe('First line');
     });
 
     it('should handle single line content', () => {
-      const content = "Only one line";
-      expect(getFirstLine(content)).toBe("Only one line");
+      const content = 'Only one line';
+      expect(getFirstLine(content)).toBe('Only one line');
     });
 
     it('should truncate long lines to 80 characters', () => {
-      const longLine = "a".repeat(100);
+      const longLine = 'a'.repeat(100);
       const content = `${longLine}\nSecond line`;
-      expect(getFirstLine(content)).toBe("a".repeat(80));
+      expect(getFirstLine(content)).toBe('a'.repeat(80));
     });
 
     it('should handle empty content', () => {
-      expect(getFirstLine("")).toBe("");
+      expect(getFirstLine('')).toBe('');
     });
 
     it('should handle markdown headers', () => {
-      const content = "## A Test Header\n\nsome content";
-      expect(getFirstLine(content)).toBe("## A Test Header");
+      const content = '## A Test Header\n\nsome content';
+      expect(getFirstLine(content)).toBe('## A Test Header');
     });
   });
 
   describe('scru128ToHumanTime', () => {
     it('should return a properly formatted timestamp', () => {
-      const result = scru128ToHumanTime("some-scru128-id");
+      const result = scru128ToHumanTime('some-scru128-id');
       expect(result).toMatch(/^\d{4}-\d{2}-\d{2}-\d{2}:\d{2}$/);
     });
   });

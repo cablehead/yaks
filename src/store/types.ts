@@ -15,10 +15,10 @@ export interface AppendRequest {
 export interface EventStreamInterface {
   // Append a new event
   appendEvent(request: AppendRequest): Promise<string>;
-  
+
   // Get content from CAS by hash
   getCasContent(hash: string): Promise<string>;
-  
+
   // Listen for new frames
   onFrame(callback: (frame: Frame) => void): () => void;
 }

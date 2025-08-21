@@ -1,27 +1,34 @@
-import { For, Show, createEffect, createSignal, onMount, onCleanup } from "solid-js";
-import { createYakStore } from "./store";
-import type { Note } from "./store";
-import { Editor } from "./components/Editor";
-import "./App.css";
+import {
+  For,
+  Show,
+  createEffect,
+  createSignal,
+  onMount,
+  onCleanup,
+} from 'solid-js';
+import { createYakStore } from './store';
+import type { Note } from './store';
+import { Editor } from './components/Editor';
+import './App.css';
 
 function App() {
   const store = createYakStore();
-  
+
   // Debug the store state
   createEffect(() => {
-    console.log("=== Store State Debug ===");
-    console.log("Current yak ID:", store.currentYakId());
-    console.log("Current yak:", store.currentYak());
-    console.log("All yaks:", store.yaks());
-    console.log("Current notes:", store.currentNotes());
-    console.log("========================");
+    console.log('=== Store State Debug ===');
+    console.log('Current yak ID:', store.currentYakId());
+    console.log('Current yak:', store.currentYak());
+    console.log('All yaks:', store.yaks());
+    console.log('Current notes:', store.currentNotes());
+    console.log('========================');
   });
-  
+
   // Editor state
   const [isEditorOpen, setIsEditorOpen] = createSignal(false);
-  const [editorContent, setEditorContent] = createSignal("");
+  const [editorContent, setEditorContent] = createSignal('');
   const [editingNoteId, setEditingNoteId] = createSignal<string | null>(null);
-  
+
   // Effect to auto-select first note when currentYak changes
   createEffect(() => {
     const notes = store.currentNotes();
@@ -29,7 +36,7 @@ function App() {
       store.setSelectedNoteId(notes[0].id);
     }
   });
-  
+
   // Keyboard shortcuts
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.metaKey || e.ctrlKey) {
@@ -47,21 +54,21 @@ function App() {
       }
     }
   };
-  
+
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown);
   });
-  
+
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeyDown);
   });
-  
+
   const handleNoteClick = (note: Note) => {
     store.setSelectedNoteId(note.id);
     // Scroll to the note in preview
     scrollToNote(note.id);
   };
-  
+
   // Scroll to note function
   const scrollToNote = (noteId: string) => {
     setTimeout(() => {
@@ -69,19 +76,19 @@ function App() {
       if (noteElement) {
         noteElement.scrollIntoView({
           behavior: 'smooth',
-          block: 'start'
+          block: 'start',
         });
       }
     }, 100); // Small delay to ensure DOM is updated
   };
-  
+
   // Editor functions
   const openNewNoteEditor = () => {
     setEditingNoteId(null);
-    setEditorContent("");
+    setEditorContent('');
     setIsEditorOpen(true);
   };
-  
+
   const openEditNoteEditor = () => {
     const selectedNote = store.selectedNote();
     if (selectedNote) {
@@ -90,46 +97,46 @@ function App() {
       setIsEditorOpen(true);
     }
   };
-  
+
   const handleEditorSave = async (content: string) => {
-    console.log("handleEditorSave called with content:", content);
-    console.log("Current yak ID:", store.currentYakId());
-    console.log("Editing note ID:", editingNoteId());
-    
+    console.log('handleEditorSave called with content:', content);
+    console.log('Current yak ID:', store.currentYakId());
+    console.log('Editing note ID:', editingNoteId());
+
     if (!content.trim()) {
-      console.log("Content is empty, closing editor");
+      console.log('Content is empty, closing editor');
       setIsEditorOpen(false);
       return;
     }
-    
+
     try {
       const noteId = editingNoteId();
       if (noteId) {
         // Editing existing note
-        console.log("Editing existing note:", noteId);
+        console.log('Editing existing note:', noteId);
         await store.editNote(noteId, content);
       } else {
         // Creating new note
-        console.log("Creating new note");
+        console.log('Creating new note');
         await store.createNote(content);
       }
-      
+
       setIsEditorOpen(false);
       setEditingNoteId(null);
-      setEditorContent("");
-      console.log("Note saved successfully");
+      setEditorContent('');
+      console.log('Note saved successfully');
     } catch (error) {
-      console.error("Failed to save note:", error);
+      console.error('Failed to save note:', error);
       // TODO: Show error to user
     }
   };
-  
+
   const handleEditorClose = () => {
     setIsEditorOpen(false);
     setEditingNoteId(null);
-    setEditorContent("");
+    setEditorContent('');
   };
-  
+
   return (
     <div class="app">
       <div class="panes">
@@ -142,13 +149,15 @@ function App() {
           </div>
           <div class="notes-items">
             <For each={store.currentNotes()}>
-              {(note) => (
-                <div 
+              {note => (
+                <div
                   class={`note-item ${store.selectedNoteId() === note.id ? 'selected' : ''}`}
                   onClick={() => handleNoteClick(note)}
                 >
-                  <div class="note-title">{note.title || "Untitled"}</div>
-                  <div class="note-timestamp">{new Date(note.timestamp).toLocaleTimeString()}</div>
+                  <div class="note-title">{note.title || 'Untitled'}</div>
+                  <div class="note-timestamp">
+                    {new Date(note.timestamp).toLocaleTimeString()}
+                  </div>
                 </div>
               )}
             </For>
@@ -159,14 +168,14 @@ function App() {
             </Show>
           </div>
         </div>
-        
+
         {/* Right Pane: Preview */}
         <div class="preview-pane">
           <Show when={store.selectedNote()}>
             <div class="preview-content">
               <For each={store.currentNotes()}>
-                {(note) => (
-                  <div 
+                {note => (
+                  <div
                     class={`note-block ${store.selectedNoteId() === note.id ? 'active' : 'faded'}`}
                     id={`note-${note.id}`}
                   >
@@ -186,7 +195,7 @@ function App() {
           </Show>
         </div>
       </div>
-      
+
       {/* Editor Overlay */}
       <Editor
         isOpen={isEditorOpen()}

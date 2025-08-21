@@ -15,9 +15,9 @@ class MockEventStream implements EventStreamInterface {
         this.frameCallback({
           id: frameId,
           topic: request.topic,
-          context_id: "0000000000000000000000000",
-          hash: "mock-hash",
-          meta: request.meta
+          context_id: '0000000000000000000000000',
+          hash: 'mock-hash',
+          meta: request.meta,
         });
       }
     }, 10);
@@ -25,7 +25,7 @@ class MockEventStream implements EventStreamInterface {
   }
 
   async getCasContent(hash: string): Promise<string> {
-    return Promise.resolve("mock content for " + hash);
+    return Promise.resolve('mock content for ' + hash);
   }
 
   onFrame(callback: (frame: Frame) => void): () => void {
@@ -50,7 +50,7 @@ describe('Yak Store', () => {
       const store = createYakStore(mockEventStream);
 
       expect(Object.keys(store.yaks())).toHaveLength(0);
-      expect(store.currentYakId()).toBe("");
+      expect(store.currentYakId()).toBe('');
       expect(store.currentNotes()).toHaveLength(0);
     });
   });
@@ -58,18 +58,18 @@ describe('Yak Store', () => {
   it('should process yak.create frames', async () => {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Test timeout')), 500);
-      
+
       createRoot(() => {
         const mockEventStream = new MockEventStream();
         const store = createYakStore(mockEventStream);
 
         // Simulate receiving a yak.create frame
         const yakFrame: Frame = {
-          id: "test-yak-id",
-          topic: "yak.create",
-          context_id: "0000000000000000000000000",
+          id: 'test-yak-id',
+          topic: 'yak.create',
+          context_id: '0000000000000000000000000',
           hash: null,
-          meta: null
+          meta: null,
         };
 
         // Use createEffect to wait for store reactivity
@@ -79,12 +79,16 @@ describe('Yak Store', () => {
           try {
             const yaks = store.yaks();
             const yakKeys = Object.keys(yaks);
-            
-            if (yakKeys.length === 1 && yaks["test-yak-id"] && store.currentYakId() === "test-yak-id") {
+
+            if (
+              yakKeys.length === 1 &&
+              yaks['test-yak-id'] &&
+              store.currentYakId() === 'test-yak-id'
+            ) {
               expect(yakKeys).toHaveLength(1);
-              expect(yaks["test-yak-id"]).toBeDefined();
-              expect(yaks["test-yak-id"].id).toBe("test-yak-id");
-              expect(store.currentYakId()).toBe("test-yak-id");
+              expect(yaks['test-yak-id']).toBeDefined();
+              expect(yaks['test-yak-id'].id).toBe('test-yak-id');
+              expect(store.currentYakId()).toBe('test-yak-id');
               clearTimeout(timeout);
               resolve();
               return;
@@ -92,7 +96,7 @@ describe('Yak Store', () => {
           } catch (error) {
             // Continue checking
           }
-          
+
           // Give up after 20 checks
           if (checks < 20) {
             setTimeout(checkStore, 50);
@@ -115,18 +119,18 @@ describe('Yak Store', () => {
   it('should process note.create frames', async () => {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Test timeout')), 1500);
-      
+
       createRoot(() => {
         const mockEventStream = new MockEventStream();
         const store = createYakStore(mockEventStream);
 
         // First create a yak
         const yakFrame: Frame = {
-          id: "test-yak-id",
-          topic: "yak.create", 
-          context_id: "0000000000000000000000000",
+          id: 'test-yak-id',
+          topic: 'yak.create',
+          context_id: '0000000000000000000000000',
           hash: null,
-          meta: null
+          meta: null,
         };
 
         // Wait for yak to be processed, then create note
@@ -136,18 +140,18 @@ describe('Yak Store', () => {
 
         const checkYakThenNote = () => {
           checks++;
-          
+
           if (!yakProcessed) {
             const yaks = store.yaks();
-            if (Object.keys(yaks).length === 1 && yaks["test-yak-id"]) {
+            if (Object.keys(yaks).length === 1 && yaks['test-yak-id']) {
               yakProcessed = true;
               // Now create the note
               const noteFrame: Frame = {
-                id: "test-note-id",
-                topic: "note.create",
-                context_id: "0000000000000000000000000", 
-                hash: "test-hash",
-                meta: { yak_id: "test-yak-id" }
+                id: 'test-note-id',
+                topic: 'note.create',
+                context_id: '0000000000000000000000000',
+                hash: 'test-hash',
+                meta: { yak_id: 'test-yak-id' },
               };
               mockEventStream.simulateFrame(noteFrame);
             }
@@ -168,13 +172,17 @@ describe('Yak Store', () => {
               }
             }
           }
-          
+
           // Continue checking with longer delays for async CAS operations
           if (checks < 20) {
             setTimeout(checkYakThenNote, 50);
           } else {
             clearTimeout(timeout);
-            reject(new Error(`Test failed after ${checks} checks. yakProcessed: ${yakProcessed}, noteProcessed: ${noteProcessed}`));
+            reject(
+              new Error(
+                `Test failed after ${checks} checks. yakProcessed: ${yakProcessed}, noteProcessed: ${noteProcessed}`
+              )
+            );
           }
         };
 
