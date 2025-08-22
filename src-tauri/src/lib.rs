@@ -131,36 +131,33 @@ async fn initialize_store(app: &AppHandle) -> Result<Store> {
         println!("Existing yak found, skipping creation");
     }
 
-    // Start streaming existing events to frontend with a small delay
-    let app_clone = app.clone();
-    let store_clone = store.clone();
-    tokio::spawn(async move {
-        // Give frontend time to set up listeners
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        if let Err(e) = stream_existing_events(app_clone, store_clone).await {
-            eprintln!("Failed to stream existing events: {e}");
-        }
-    });
-
     Ok(store)
 }
 
-async fn stream_existing_events(app: AppHandle, store: Store) -> Result<()> {
-    println!("Starting to stream existing events...");
+#[tauri::command]
+async fn subscribe_to_events(store: State<'_, Store>, app: AppHandle) -> Result<(), String> {
+    println!("Starting event subscription...");
 
-    // Create read options to get all existing frames without following new ones
-    let read_options = ReadOptions::builder().follow(FollowOption::Off).build();
+    // Create read options to get all frames (historical + new ones) with follow enabled
+    let read_options = ReadOptions::builder().follow(FollowOption::On).build();
 
-    println!("Reading frames from store...");
+    println!("Reading frames from store with follow enabled...");
     let mut rx = store.read(read_options).await;
     let mut count = 0;
-    while let Some(frame) = rx.recv().await {
-        count += 1;
-        println!("Streaming frame {count}: {frame:?}");
-        app.emit("frame", &frame)?;
-    }
 
-    println!("Finished streaming {count} existing events");
+    // Spawn task to handle the continuous stream
+    tokio::spawn(async move {
+        while let Some(frame) = rx.recv().await {
+            count += 1;
+            println!("Streaming frame {count}: {frame:?}");
+            if let Err(e) = app.emit("frame", &frame) {
+                eprintln!("Failed to emit frame: {e}");
+                break;
+            }
+        }
+        println!("Event stream ended after {count} frames");
+    });
+
     Ok(())
 }
 
@@ -185,7 +182,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             append_event,
             get_cas_content,
-            log_message
+            log_message,
+            subscribe_to_events
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -73,6 +73,7 @@ export function createYakStore(
 
   const [currentYakId, setCurrentYakId] = createSignal<string>('');
   const [selectedNoteId, setSelectedNoteId] = createSignal<string>('');
+  const [thresholdReached, setThresholdReached] = createSignal(false);
 
   // Set up event stream listener
   let cleanup: (() => void) | null = null;
@@ -87,6 +88,12 @@ export function createYakStore(
   });
 
   function processFrame(frame: Frame) {
+    // Handle threshold frame to signal end of historical replay
+    if (frame.topic === 'xs.threshold') {
+      setThresholdReached(true);
+      return;
+    }
+
     if (frame.topic === 'yak.create') {
       const yak: Yak = {
         id: frame.id,
@@ -184,13 +191,15 @@ export function createYakStore(
     }
   }
 
-  // Computed values
+  // Computed values - gated by threshold to prevent UI updates during replay
   const currentYak = createMemo(() => {
+    if (!thresholdReached()) return undefined;
     const id = currentYakId();
     return id ? state.yaks[id] : null;
   });
 
   const currentNotes = createMemo(() => {
+    if (!thresholdReached()) return undefined;
     const yakId = currentYakId();
     if (!yakId) return [];
 
@@ -199,6 +208,7 @@ export function createYakStore(
   });
 
   const selectedNote = createMemo(() => {
+    if (!thresholdReached()) return undefined;
     const id = selectedNoteId();
     return id ? state.notes[id] : null;
   });
@@ -236,6 +246,16 @@ export function createYakStore(
     });
   }
 
+  // Subscribe function to initiate event stream
+  async function subscribe() {
+    try {
+      await eventStream.subscribeToEvents();
+      console.log('Successfully subscribed to events');
+    } catch (error) {
+      console.error('Failed to subscribe to events:', error);
+    }
+  }
+
   return {
     // State
     yaks: () => state.yaks,
@@ -245,12 +265,14 @@ export function createYakStore(
     selectedNote,
     currentYakId,
     selectedNoteId,
+    thresholdReached,
 
     // Actions
     setCurrentYakId,
     setSelectedNoteId,
     createNote,
     editNote,
+    subscribe,
 
     // Raw event stream for debugging
     eventStream,

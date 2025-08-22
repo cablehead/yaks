@@ -29,6 +29,11 @@ class MockEventStream implements EventStreamInterface {
     return Promise.resolve(this.casContent[hash] || 'mock content for ' + hash);
   }
 
+  async subscribeToEvents(): Promise<void> {
+    // Mock implementation - in real tests, we'll manually trigger frames
+    return Promise.resolve();
+  }
+
   onFrame(callback: (frame: Frame) => void): () => void {
     this.frameCallback = callback;
     return () => {
@@ -56,7 +61,8 @@ describe('Yak Store', () => {
 
       expect(Object.keys(store.yaks())).toHaveLength(0);
       expect(store.currentYakId()).toBe('');
-      expect(store.currentNotes()).toHaveLength(0);
+      expect(store.currentNotes()).toBe(undefined); // undefined until threshold reached
+      expect(store.thresholdReached()).toBe(false);
     });
   });
 

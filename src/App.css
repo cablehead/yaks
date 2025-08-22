@@ -190,6 +190,15 @@ body {
   font-size: 16px;
 }
 
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
 /* Editor Overlay */
 .editor-overlay {
   position: fixed;

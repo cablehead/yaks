@@ -36,6 +36,10 @@ export class TauriEventStream implements EventStreamInterface {
     return await invoke<string>('get_cas_content', { hash });
   }
 
+  async subscribeToEvents(): Promise<void> {
+    return await invoke<void>('subscribe_to_events');
+  }
+
   onFrame(callback: (frame: Frame) => void): () => void {
     console.log('Setting up frame listener...');
     const unlisten = listen<Frame>('frame', event => {

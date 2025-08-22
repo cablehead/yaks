@@ -14,6 +14,11 @@ import './App.css';
 function App() {
   const store = createYakStore();
 
+  // Subscribe to events on mount
+  onMount(() => {
+    store.subscribe();
+  });
+
   // Debug the store state
   createEffect(() => {
     console.log('=== Store State Debug ===');
@@ -139,70 +144,75 @@ function App() {
 
   return (
     <div class="app">
-      <div class="panes">
-        {/* Left Pane: Notes List */}
-        <div class="notes-list">
-          <div class="notes-header">
-            <Show when={store.currentYak()}>
-              <h2>{store.currentYak()?.name}</h2>
-            </Show>
-          </div>
-          <div class="notes-items">
-            <For each={store.currentNotes()}>
-              {note => (
-                <div
-                  class={`note-item ${store.selectedNoteId() === note.id ? 'selected' : ''}`}
-                  onClick={() => handleNoteClick(note)}
-                >
-                  <div class="note-title">{note.title || 'Untitled'}</div>
-                  <div class="note-timestamp">
-                    {new Date(note.timestamp).toLocaleTimeString()}
+      <Show
+        when={store.currentNotes() !== undefined}
+        fallback={<div class="loading">Loading...</div>}
+      >
+        <div class="panes">
+          {/* Left Pane: Notes List */}
+          <div class="notes-list">
+            <div class="notes-header">
+              <Show when={store.currentYak()}>
+                <h2>{store.currentYak()?.name}</h2>
+              </Show>
+            </div>
+            <div class="notes-items">
+              <For each={store.currentNotes()!}>
+                {note => (
+                  <div
+                    class={`note-item ${store.selectedNoteId() === note.id ? 'selected' : ''}`}
+                    onClick={() => handleNoteClick(note)}
+                  >
+                    <div class="note-title">{note.title || 'Untitled'}</div>
+                    <div class="note-timestamp">
+                      {new Date(note.timestamp).toLocaleTimeString()}
+                    </div>
                   </div>
+                )}
+              </For>
+              <Show when={store.currentNotes()!.length === 0}>
+                <div class="empty-state">
+                  <p>No notes yet. Press Cmd+N to create your first note.</p>
                 </div>
-              )}
-            </For>
-            <Show when={store.currentNotes().length === 0}>
-              <div class="empty-state">
-                <p>No notes yet. Press Cmd+N to create your first note.</p>
+              </Show>
+            </div>
+          </div>
+
+          {/* Right Pane: Preview */}
+          <div class="preview-pane">
+            <Show when={store.selectedNote()}>
+              <div class="preview-content">
+                <For each={store.currentNotes()!}>
+                  {note => (
+                    <div
+                      class={`note-block ${store.selectedNoteId() === note.id ? 'active' : 'faded'}`}
+                      id={`note-${note.id}`}
+                    >
+                      <div class="note-content">
+                        {/* For now just render plain text, we'll add markdown later */}
+                        <pre>{note.content}</pre>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <Show when={!store.selectedNote()}>
+              <div class="empty-preview">
+                <p>Select a note to preview</p>
               </div>
             </Show>
           </div>
         </div>
 
-        {/* Right Pane: Preview */}
-        <div class="preview-pane">
-          <Show when={store.selectedNote()}>
-            <div class="preview-content">
-              <For each={store.currentNotes()}>
-                {note => (
-                  <div
-                    class={`note-block ${store.selectedNoteId() === note.id ? 'active' : 'faded'}`}
-                    id={`note-${note.id}`}
-                  >
-                    <div class="note-content">
-                      {/* For now just render plain text, we'll add markdown later */}
-                      <pre>{note.content}</pre>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-          <Show when={!store.selectedNote()}>
-            <div class="empty-preview">
-              <p>Select a note to preview</p>
-            </div>
-          </Show>
-        </div>
-      </div>
-
-      {/* Editor Overlay */}
-      <Editor
-        isOpen={isEditorOpen()}
-        initialContent={editorContent()}
-        onClose={handleEditorClose}
-        onSave={handleEditorSave}
-      />
+        {/* Editor Overlay */}
+        <Editor
+          isOpen={isEditorOpen()}
+          initialContent={editorContent()}
+          onClose={handleEditorClose}
+          onSave={handleEditorSave}
+        />
+      </Show>
     </div>
   );
 }

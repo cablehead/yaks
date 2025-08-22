@@ -19,6 +19,9 @@ export interface EventStreamInterface {
   // Get content from CAS by hash
   getCasContent(hash: string): Promise<string>;
 
+  // Subscribe to event stream (historical + live)
+  subscribeToEvents(): Promise<void>;
+
   // Listen for new frames
   onFrame(callback: (frame: Frame) => void): () => void;
 }
