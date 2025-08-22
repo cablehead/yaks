@@ -17,4 +17,7 @@ export default defineConfig({
     threads: false,
     isolate: false
   },
+  resolve: {
+    conditions: ['browser', 'development', 'import', 'module', 'default']
+  },
 });

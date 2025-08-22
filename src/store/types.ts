@@ -3,13 +3,13 @@ export interface Frame {
   topic: string;
   context_id: string;
   hash?: string;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 }
 
 export interface AppendRequest {
   topic: string;
   content: string;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 }
 
 export interface EventStreamInterface {
