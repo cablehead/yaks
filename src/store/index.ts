@@ -1,5 +1,11 @@
 import { createStore } from 'solid-js/store';
-import { createSignal, createMemo, onCleanup, batch } from 'solid-js';
+import {
+  createSignal,
+  createMemo,
+  createEffect,
+  onCleanup,
+  batch,
+} from 'solid-js';
 import { Scru128Id } from 'scru128';
 import type { EventStreamInterface, Frame } from './types';
 import { TauriEventStream } from './tauri'; // This imports the console override
@@ -74,17 +80,24 @@ export function createYakStore(
   const [currentYakId, setCurrentYakId] = createSignal<string>('');
   const [selectedNoteId, setSelectedNoteId] = createSignal<string>('');
   const [thresholdReached, setThresholdReached] = createSignal(false);
+  const [currentFrame, setCurrentFrame] = createSignal<Frame | null>(null);
 
-  // Set up event stream listener
+  // Set up event stream listener to feed frames into signal
   let cleanup: (() => void) | null = null;
-
-  // Set up listener immediately (for tests and immediate usage)
   cleanup = eventStream.onFrame(frame => {
-    processFrame(frame);
+    setCurrentFrame(frame);
   });
 
   onCleanup(() => {
     cleanup?.();
+  });
+
+  // Process frames using createEffect for proper reactivity
+  createEffect(() => {
+    const frame = currentFrame();
+    if (!frame) return;
+
+    processFrame(frame);
   });
 
   function processFrame(frame: Frame) {
@@ -113,35 +126,40 @@ export function createYakStore(
       const yakId = frame.meta?.yak_id;
       if (!yakId) return;
 
-      // Get content from CAS if hash is provided
+      // Create note immediately with placeholder content
+      const note: Note = {
+        id: frame.id,
+        content: '', // Will be loaded asynchronously
+        title: 'Loading...',
+        yakId,
+        hash: frame.hash,
+        timestamp: scru128ToTimestamp(frame.id),
+      };
+
+      batch(() => {
+        setState('notes', frame.id, note);
+        setState('notesByYak', yakId, notes => [...notes, frame.id]);
+
+        // Update yak's last activity
+        setState('yaks', yakId, 'lastActivity', scru128ToTimestamp(frame.id));
+      });
+
+      // Load content asynchronously if hash is provided
       if (frame.hash) {
         eventStream
           .getCasContent(frame.hash)
           .then(content => {
-            const note: Note = {
-              id: frame.id,
-              content,
-              title: getFirstLine(content),
-              yakId,
-              hash: frame.hash,
-              timestamp: scru128ToTimestamp(frame.id),
-            };
-
             batch(() => {
-              setState('notes', frame.id, note);
-              setState('notesByYak', yakId, notes => [...notes, frame.id]);
-
-              // Update yak's last activity
-              setState(
-                'yaks',
-                yakId,
-                'lastActivity',
-                scru128ToTimestamp(frame.id)
-              );
+              setState('notes', frame.id, 'content', content);
+              setState('notes', frame.id, 'title', getFirstLine(content));
             });
           })
           .catch(error => {
             console.error('Failed to get CAS content:', error);
+            batch(() => {
+              setState('notes', frame.id, 'content', 'Failed to load content');
+              setState('notes', frame.id, 'title', 'Error loading content');
+            });
           });
       }
     } else if (frame.topic === 'note.edit') {
@@ -149,44 +167,54 @@ export function createYakStore(
       const originalNoteId = frame.meta?.note_id;
       if (!yakId || !originalNoteId) return;
 
-      // Get content from CAS
+      // Capture current selectedNoteId before state changes
+      const currentSelectedId = selectedNoteId();
+
+      // Create edited note immediately with placeholder content
+      const note: Note = {
+        id: frame.id,
+        content: '', // Will be loaded asynchronously
+        title: 'Loading...',
+        yakId,
+        hash: frame.hash,
+        timestamp: scru128ToTimestamp(frame.id),
+        editedNoteId: originalNoteId,
+      };
+
+      batch(() => {
+        setState('notes', frame.id, note);
+
+        // Replace the old note ID with the new one in the yak's notes list
+        setState('notesByYak', yakId, notes =>
+          notes.map(id => (id === originalNoteId ? frame.id : id))
+        );
+
+        // Update selectedNoteId if it was pointing to the old note
+        if (currentSelectedId === originalNoteId) {
+          setSelectedNoteId(frame.id);
+        }
+
+        // Update yak's last activity
+        setState('yaks', yakId, 'lastActivity', scru128ToTimestamp(frame.id));
+      });
+
+      // Load content asynchronously if hash is provided
       if (frame.hash) {
-        // Capture current selectedNoteId before async operation
-        const currentSelectedId = selectedNoteId();
-
-        eventStream.getCasContent(frame.hash).then(content => {
-          const note: Note = {
-            id: frame.id,
-            content,
-            title: getFirstLine(content),
-            yakId,
-            hash: frame.hash,
-            timestamp: scru128ToTimestamp(frame.id),
-            editedNoteId: originalNoteId,
-          };
-
-          batch(() => {
-            setState('notes', frame.id, note);
-
-            // Replace the old note ID with the new one in the yak's notes list
-            setState('notesByYak', yakId, notes =>
-              notes.map(id => (id === originalNoteId ? frame.id : id))
-            );
-
-            // Update selectedNoteId if it was pointing to the old note
-            if (currentSelectedId === originalNoteId) {
-              setSelectedNoteId(frame.id);
-            }
-
-            // Update yak's last activity
-            setState(
-              'yaks',
-              yakId,
-              'lastActivity',
-              scru128ToTimestamp(frame.id)
-            );
+        eventStream
+          .getCasContent(frame.hash)
+          .then(content => {
+            batch(() => {
+              setState('notes', frame.id, 'content', content);
+              setState('notes', frame.id, 'title', getFirstLine(content));
+            });
+          })
+          .catch(error => {
+            console.error('Failed to get CAS content:', error);
+            batch(() => {
+              setState('notes', frame.id, 'content', 'Failed to load content');
+              setState('notes', frame.id, 'title', 'Error loading content');
+            });
           });
-        });
       }
     }
   }
@@ -276,5 +304,10 @@ export function createYakStore(
 
     // Raw event stream for debugging
     eventStream,
+
+    // Debug access to internal state
+    _debug: {
+      notesByYak: () => state.notesByYak,
+    },
   };
 }

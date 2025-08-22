@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createRoot } from 'solid-js';
+import { testEffect } from '@solidjs/testing-library';
 import { createYakStore } from './index';
 import type { EventStreamInterface, Frame } from './types';
 
@@ -26,7 +27,18 @@ class MockEventStream implements EventStreamInterface {
   }
 
   async getCasContent(hash: string): Promise<string> {
-    return Promise.resolve(this.casContent[hash] || 'mock content for ' + hash);
+    // Provide specific content for test hashes
+    const content =
+      this.casContent[hash] ||
+      {
+        'test-hash': 'Test note content',
+        'hash-1': 'First note content',
+        'hash-2': 'Second note content',
+        'edited-hash': 'Edited note content',
+      }[hash] ||
+      'mock content for ' + hash;
+
+    return Promise.resolve(content);
   }
 
   async subscribeToEvents(): Promise<void> {
@@ -67,184 +79,116 @@ describe('Yak Store', () => {
   });
 
   it('should process yak.create frames', async () => {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Test timeout')), 500);
+    await testEffect(done => {
+      const mockEventStream = new MockEventStream();
+      const store = createYakStore(mockEventStream);
 
-      createRoot(() => {
-        const mockEventStream = new MockEventStream();
-        const store = createYakStore(mockEventStream);
+      // Simulate receiving a yak.create frame
+      const yakFrame: Frame = {
+        id: 'test-yak-id',
+        topic: 'yak.create',
+        context_id: '0000000000000000000000000',
+        hash: null,
+        meta: null,
+      };
 
-        // Simulate receiving a yak.create frame
-        const yakFrame: Frame = {
-          id: 'test-yak-id',
-          topic: 'yak.create',
-          context_id: '0000000000000000000000000',
-          hash: null,
-          meta: null,
-        };
+      // Simulate frame
+      mockEventStream.simulateFrame(yakFrame);
 
-        // Use createEffect to wait for store reactivity
-        let checks = 0;
-        const checkStore = () => {
-          checks++;
-          try {
-            const yaks = store.yaks();
-            const yakKeys = Object.keys(yaks);
+      // Wait a brief moment for processing, then check state
+      setTimeout(() => {
+        try {
+          const yaks = store.yaks();
+          const yakKeys = Object.keys(yaks);
 
-            if (
-              yakKeys.length === 1 &&
-              yaks['test-yak-id'] &&
-              store.currentYakId() === 'test-yak-id'
-            ) {
-              expect(yakKeys).toHaveLength(1);
-              expect(yaks['test-yak-id']).toBeDefined();
-              expect(yaks['test-yak-id'].id).toBe('test-yak-id');
-              expect(store.currentYakId()).toBe('test-yak-id');
-              clearTimeout(timeout);
-              resolve();
-              return;
-            }
-          } catch {
-            // Continue checking
-          }
-
-          // Give up after 20 checks
-          if (checks < 20) {
-            setTimeout(checkStore, 50);
-          } else {
-            clearTimeout(timeout);
-            reject(new Error(`Store state not updated after ${checks} checks`));
-          }
-        };
-
-        // Simulate frame after a brief delay
-        setTimeout(() => {
-          mockEventStream.simulateFrame(yakFrame);
-          // Start checking store state
-          setTimeout(checkStore, 10);
-        }, 50);
-      });
+          expect(yakKeys).toHaveLength(1);
+          expect(yaks['test-yak-id']).toBeDefined();
+          expect(yaks['test-yak-id'].id).toBe('test-yak-id');
+          expect(store.currentYakId()).toBe('test-yak-id');
+          done();
+        } catch (error) {
+          done(error);
+        }
+      }, 100);
     });
   });
 
   it('should process note.create frames', async () => {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Test timeout')), 1500);
+    await testEffect(done => {
+      const mockEventStream = new MockEventStream();
+      const store = createYakStore(mockEventStream);
 
-      createRoot(() => {
-        const mockEventStream = new MockEventStream();
-        const store = createYakStore(mockEventStream);
+      // First create a yak
+      const yakFrame: Frame = {
+        id: 'test-yak-id',
+        topic: 'yak.create',
+        context_id: '0000000000000000000000000',
+        hash: null,
+        meta: null,
+      };
+      mockEventStream.simulateFrame(yakFrame);
 
-        // First create a yak
-        const yakFrame: Frame = {
-          id: 'test-yak-id',
-          topic: 'yak.create',
-          context_id: '0000000000000000000000000',
-          hash: null,
-          meta: null,
-        };
-
-        // Wait for yak to be processed, then create note
-        let yakProcessed = false;
-        let noteProcessed = false;
-        let checks = 0;
-
-        const checkYakThenNote = () => {
-          checks++;
-
-          if (!yakProcessed) {
-            const yaks = store.yaks();
-            if (Object.keys(yaks).length === 1 && yaks['test-yak-id']) {
-              yakProcessed = true;
-              // Now create the note
-              const noteFrame: Frame = {
-                id: 'test-note-id',
-                topic: 'note.create',
-                context_id: '0000000000000000000000000',
-                hash: 'test-hash',
-                meta: { yak_id: 'test-yak-id' },
-              };
-              mockEventStream.simulateFrame(noteFrame);
-            }
-          } else if (!noteProcessed) {
-            // Give a few checks for async CAS content processing
-            if (checks > 3) {
-              try {
-                // Verify the note creation process completed
-                // (the async nature in test environment makes direct memo checking unreliable)
-                expect(yakProcessed).toBe(true);
-                clearTimeout(timeout);
-                resolve();
-                return;
-              } catch {
-                clearTimeout(timeout);
-                reject(new Error('Store test failed'));
-                return;
-              }
-            }
-          }
-
-          // Continue checking with longer delays for async CAS operations
-          if (checks < 20) {
-            setTimeout(checkYakThenNote, 50);
-          } else {
-            clearTimeout(timeout);
-            reject(
-              new Error(
-                `Test failed after ${checks} checks. yakProcessed: ${yakProcessed}, noteProcessed: ${noteProcessed}`
-              )
-            );
-          }
-        };
-
-        // Start by simulating yak frame
-        setTimeout(() => {
-          mockEventStream.simulateFrame(yakFrame);
-          setTimeout(checkYakThenNote, 10);
-        }, 50);
-      });
-    });
-  });
-
-  it('should update selectedNoteId when editing a note', async () => {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Test timeout')), 1000);
-
-      createRoot(async () => {
-        const mockEventStream = new MockEventStream();
-        const store = createYakStore(mockEventStream);
-
-        try {
-          // Create a yak
-          const yakFrame: Frame = {
-            id: 'test-yak-id',
-            topic: 'yak.create',
-            context_id: '0000000000000000000000000',
-            hash: null,
-            meta: null,
-          };
-          mockEventStream.simulateFrame(yakFrame);
-
-          // Wait a bit for yak processing
-          await new Promise(r => setTimeout(r, 50));
-
-          // Create a note
+      // Wait for yak processing, then create note
+      setTimeout(() => {
+        const yaks = store.yaks();
+        if (Object.keys(yaks).length === 1 && yaks['test-yak-id']) {
+          // Now create the note
           const noteFrame: Frame = {
-            id: 'original-note-id',
+            id: 'test-note-id',
             topic: 'note.create',
             context_id: '0000000000000000000000000',
-            hash: 'original-hash',
+            hash: 'test-hash',
             meta: { yak_id: 'test-yak-id' },
           };
           mockEventStream.simulateFrame(noteFrame);
 
-          // Wait for note processing
-          await new Promise(r => setTimeout(r, 100));
+          // Wait for async CAS content loading
+          setTimeout(() => {
+            try {
+              const notes = store.notes();
+              expect(Object.keys(notes)).toContain('test-note-id');
+              expect(notes['test-note-id']).toBeDefined();
+              done();
+            } catch (error) {
+              done(error);
+            }
+          }, 100);
+        } else {
+          done(new Error('Yak was not created properly'));
+        }
+      }, 50);
+    });
+  });
 
+  it('should update selectedNoteId when editing a note', async () => {
+    await testEffect(done => {
+      const mockEventStream = new MockEventStream();
+      const store = createYakStore(mockEventStream);
+
+      // Create a yak
+      const yakFrame: Frame = {
+        id: 'test-yak-id',
+        topic: 'yak.create',
+        context_id: '0000000000000000000000000',
+        hash: null,
+        meta: null,
+      };
+      mockEventStream.simulateFrame(yakFrame);
+
+      setTimeout(() => {
+        // Create a note
+        const noteFrame: Frame = {
+          id: 'original-note-id',
+          topic: 'note.create',
+          context_id: '0000000000000000000000000',
+          hash: 'original-hash',
+          meta: { yak_id: 'test-yak-id' },
+        };
+        mockEventStream.simulateFrame(noteFrame);
+
+        setTimeout(() => {
           // Select the original note
           store.setSelectedNoteId('original-note-id');
-
-          // Verify the note is selected
           expect(store.selectedNoteId()).toBe('original-note-id');
 
           // Edit the note
@@ -257,23 +201,156 @@ describe('Yak Store', () => {
           };
           mockEventStream.simulateFrame(editFrame);
 
-          // Wait for edit processing
-          await new Promise(r => setTimeout(r, 100));
+          setTimeout(() => {
+            try {
+              // The selectedNoteId should be updated to the new note ID
+              const currentSelectedId = store.selectedNoteId();
+              expect(currentSelectedId).toBe('edited-note-id');
+              done();
+            } catch (error) {
+              done(error);
+            }
+          }, 100);
+        }, 100);
+      }, 50);
+    });
+  });
 
-          // BUG: The selectedNoteId should be updated to the new note ID
-          // but it's still pointing to the old one
-          const currentSelectedId = store.selectedNoteId();
+  it('should auto-select first note after threshold is reached', async () => {
+    await testEffect(done => {
+      const mockEventStream = new MockEventStream();
+      const store = createYakStore(mockEventStream);
 
-          // This assertion should pass but will fail due to the bug
-          expect(currentSelectedId).toBe('edited-note-id');
+      // Create a yak
+      const yakFrame: Frame = {
+        id: 'test-yak-id',
+        topic: 'yak.create',
+        context_id: '0000000000000000000000000',
+        hash: null,
+        meta: null,
+      };
+      mockEventStream.simulateFrame(yakFrame);
 
-          clearTimeout(timeout);
-          resolve();
-        } catch (error) {
-          clearTimeout(timeout);
-          reject(error);
-        }
-      });
+      setTimeout(() => {
+        // Create a note
+        const noteFrame: Frame = {
+          id: 'test-note-id',
+          topic: 'note.create',
+          context_id: '0000000000000000000000000',
+          hash: 'test-hash',
+          meta: { yak_id: 'test-yak-id' },
+        };
+        mockEventStream.simulateFrame(noteFrame);
+
+        setTimeout(() => {
+          // Before threshold - should have no selection
+          expect(store.selectedNoteId()).toBe('');
+          expect(store.selectedNote()).toBe(undefined);
+
+          // Simulate threshold reached
+          const thresholdFrame: Frame = {
+            id: 'threshold-id',
+            topic: 'xs.threshold',
+            context_id: '0000000000000000000000000',
+            hash: null,
+            meta: null,
+          };
+          mockEventStream.simulateFrame(thresholdFrame);
+
+          setTimeout(() => {
+            try {
+              // Force memo re-evaluation by accessing threshold again
+              expect(store.thresholdReached()).toBe(true);
+
+              // After threshold - simulate the auto-selection logic that happens in App.tsx
+              const notes = store.currentNotes();
+
+              if (notes && notes.length > 0 && !store.selectedNoteId()) {
+                store.setSelectedNoteId(notes[0].id);
+              }
+
+              // Should have auto-selected the first note
+              expect(store.selectedNoteId()).toBe('test-note-id');
+              expect(store.selectedNote()).toBeTruthy();
+              expect(store.selectedNote()?.id).toBe('test-note-id');
+              done();
+            } catch (error) {
+              done(error);
+            }
+          }, 100);
+        }, 100);
+      }, 50);
+    });
+  });
+
+  it('should return correct note when manually selecting', async () => {
+    await testEffect(done => {
+      const mockEventStream = new MockEventStream();
+      const store = createYakStore(mockEventStream);
+
+      // Create a yak
+      const yakFrame: Frame = {
+        id: 'test-yak-id',
+        topic: 'yak.create',
+        context_id: '0000000000000000000000000',
+        hash: null,
+        meta: null,
+      };
+      mockEventStream.simulateFrame(yakFrame);
+
+      setTimeout(() => {
+        // Create two notes
+        const note1Frame: Frame = {
+          id: 'note-1-id',
+          topic: 'note.create',
+          context_id: '0000000000000000000000000',
+          hash: 'hash-1',
+          meta: { yak_id: 'test-yak-id' },
+        };
+        mockEventStream.simulateFrame(note1Frame);
+
+        const note2Frame: Frame = {
+          id: 'note-2-id',
+          topic: 'note.create',
+          context_id: '0000000000000000000000000',
+          hash: 'hash-2',
+          meta: { yak_id: 'test-yak-id' },
+        };
+        mockEventStream.simulateFrame(note2Frame);
+
+        setTimeout(() => {
+          // Simulate threshold reached
+          const thresholdFrame: Frame = {
+            id: 'threshold-id',
+            topic: 'xs.threshold',
+            context_id: '0000000000000000000000000',
+            hash: null,
+            meta: null,
+          };
+          mockEventStream.simulateFrame(thresholdFrame);
+
+          setTimeout(() => {
+            // Wait for async CAS content loading to complete
+            setTimeout(() => {
+              try {
+                // Manually select the second note
+                store.setSelectedNoteId('note-2-id');
+
+                // Should return the correct note object
+                expect(store.selectedNoteId()).toBe('note-2-id');
+                expect(store.selectedNote()).toBeTruthy();
+                expect(store.selectedNote()?.id).toBe('note-2-id');
+
+                // Should pass the keyboard shortcut truthiness check
+                expect(!!store.selectedNote()).toBe(true);
+                done();
+              } catch (error) {
+                done(error);
+              }
+            }, 200);
+          }, 100);
+        }, 100);
+      }, 50);
     });
   });
 });
