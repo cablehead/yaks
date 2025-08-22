@@ -228,7 +228,7 @@ export function createYakStore(eventStream?: EventStreamInterface) {
   const currentYak = createMemo(() => {
     if (!thresholdReached()) return undefined;
     const id = currentYakId();
-    return id ? state.yaks[id] : null;
+    return id ? state.yaks[id] || null : null;
   });
 
   const currentNotes = createMemo(() => {
@@ -243,7 +243,7 @@ export function createYakStore(eventStream?: EventStreamInterface) {
   const selectedNote = createMemo(() => {
     if (!thresholdReached()) return undefined;
     const id = selectedNoteId();
-    return id ? state.notes[id] : null;
+    return id ? state.notes[id] || null : null;
   });
 
   // Actions
