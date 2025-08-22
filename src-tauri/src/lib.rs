@@ -1,12 +1,8 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::sync::Mutex;
-use xs::store::{FollowOption, Frame, ReadOptions, Store as XsStore, ZERO_CONTEXT};
-
-type Store = Arc<Mutex<XsStore>>;
+use xs::store::{FollowOption, Frame, ReadOptions, Store, ZERO_CONTEXT};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AppendRequest {
@@ -21,8 +17,6 @@ async fn append_event(
     app: AppHandle,
     request: AppendRequest,
 ) -> Result<String, String> {
-    let store = store.lock().await;
-
     // Insert content into CAS if provided
     let hash = if !request.content.is_empty() {
         Some(
@@ -62,8 +56,6 @@ async fn append_event(
 
 #[tauri::command]
 async fn get_cas_content(store: State<'_, Store>, hash: String) -> Result<String, String> {
-    let store = store.lock().await;
-
     let integrity = hash
         .parse::<ssri::Integrity>()
         .map_err(|e| format!("Invalid hash format: {e}"))?;
@@ -94,17 +86,15 @@ async fn initialize_store(app: &AppHandle) -> Result<Store> {
     tokio::fs::create_dir_all(&app_data_dir).await?;
     let store_path = app_data_dir.join("store");
 
-    let store = XsStore::new(store_path);
-    let store = Arc::new(Mutex::new(store));
+    let store = Store::new(store_path);
 
     // Check if we need to create default yak
-    let store_lock = store.lock().await;
     let mut has_yak = false;
 
     // Create read options to scan all frames
     let read_options = ReadOptions::builder().follow(FollowOption::Off).build();
 
-    let mut rx = store_lock.read(read_options).await;
+    let mut rx = store.read(read_options).await;
     while let Some(frame) = rx.recv().await {
         if frame.topic == "yak.create" {
             has_yak = true;
@@ -125,7 +115,7 @@ async fn initialize_store(app: &AppHandle) -> Result<Store> {
         };
 
         println!("Creating yak frame: {yak_frame:?}");
-        let appended_yak = store_lock
+        let appended_yak = store
             .append(yak_frame)
             .map_err(|e| anyhow::anyhow!("Failed to append yak: {}", e))?;
 
@@ -140,8 +130,6 @@ async fn initialize_store(app: &AppHandle) -> Result<Store> {
     } else {
         println!("Existing yak found, skipping creation");
     }
-
-    drop(store_lock);
 
     // Start streaming existing events to frontend with a small delay
     let app_clone = app.clone();
@@ -159,7 +147,6 @@ async fn initialize_store(app: &AppHandle) -> Result<Store> {
 
 async fn stream_existing_events(app: AppHandle, store: Store) -> Result<()> {
     println!("Starting to stream existing events...");
-    let store = store.lock().await;
 
     // Create read options to get all existing frames without following new ones
     let read_options = ReadOptions::builder().follow(FollowOption::Off).build();
@@ -212,8 +199,7 @@ mod tests {
     #[tokio::test]
     async fn test_append_event_and_get_content() {
         let temp_dir = tempdir().unwrap();
-        let store = XsStore::new(temp_dir.path().to_path_buf());
-        let store = Arc::new(Mutex::new(store));
+        let store = Store::new(temp_dir.path().to_path_buf());
 
         // Test appending an event
         let _request = AppendRequest {
@@ -224,13 +210,12 @@ mod tests {
 
         // We can't easily test the full command without Tauri app context,
         // but we can test the core logic
-        let store_lock = store.lock().await;
 
         // Test CAS insertion
-        let hash = store_lock.cas_insert(b"test content").await.unwrap();
+        let hash = store.cas_insert(b"test content").await.unwrap();
 
         // Test CAS retrieval
-        let retrieved = store_lock.cas_read(&hash).await.unwrap();
+        let retrieved = store.cas_read(&hash).await.unwrap();
         assert_eq!(retrieved, b"test content");
 
         // Test frame creation and storage
@@ -243,7 +228,7 @@ mod tests {
             ttl: None,
         };
 
-        let appended = store_lock.append(frame).unwrap();
+        let appended = store.append(frame).unwrap();
         assert_eq!(appended.topic, "test.topic");
         assert!(appended.hash.is_some());
     }
