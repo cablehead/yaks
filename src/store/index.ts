@@ -8,7 +8,6 @@ import {
 } from 'solid-js';
 import { Scru128Id } from 'scru128';
 import type { EventStreamInterface, Frame } from './types';
-import { TauriEventStream } from './tauri'; // This imports the console override
 
 export interface Note {
   id: string;
@@ -68,9 +67,15 @@ function getFirstLine(content: string): string {
   return content.split('\n')[0].substring(0, 80); // First line, max 80 chars
 }
 
-export function createYakStore(
-  eventStream: EventStreamInterface = new TauriEventStream()
-) {
+export function createYakStore(eventStream?: EventStreamInterface) {
+  // Lazy import so tests aren't polluted
+  const stream =
+    eventStream ??
+    (() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+      const { TauriEventStream } = require('./tauri');
+      return new TauriEventStream();
+    })();
   const [state, setState] = createStore<StoreState>({
     yaks: {},
     notes: {},
@@ -84,7 +89,7 @@ export function createYakStore(
 
   // Set up event stream listener to feed frames into signal
   let cleanup: (() => void) | null = null;
-  cleanup = eventStream.onFrame(frame => {
+  cleanup = stream.onFrame(frame => {
     setCurrentFrame(frame);
   });
 
@@ -146,7 +151,7 @@ export function createYakStore(
 
       // Load content asynchronously if hash is provided
       if (frame.hash) {
-        eventStream
+        stream
           .getCasContent(frame.hash)
           .then(content => {
             batch(() => {
@@ -200,7 +205,7 @@ export function createYakStore(
 
       // Load content asynchronously if hash is provided
       if (frame.hash) {
-        eventStream
+        stream
           .getCasContent(frame.hash)
           .then(content => {
             batch(() => {
@@ -251,8 +256,8 @@ export function createYakStore(
       return;
     }
 
-    console.log('Calling eventStream.appendEvent...');
-    await eventStream.appendEvent({
+    console.log('Calling stream.appendEvent...');
+    await stream.appendEvent({
       topic: 'note.create',
       content,
       meta: { yak_id: yakId },
@@ -264,7 +269,7 @@ export function createYakStore(
     const note = state.notes[noteId];
     if (!note) return;
 
-    await eventStream.appendEvent({
+    await stream.appendEvent({
       topic: 'note.edit',
       content,
       meta: {
@@ -277,7 +282,7 @@ export function createYakStore(
   // Subscribe function to initiate event stream
   async function subscribe() {
     try {
-      await eventStream.subscribeToEvents();
+      await stream.subscribeToEvents();
       console.log('Successfully subscribed to events');
     } catch (error) {
       console.error('Failed to subscribe to events:', error);
@@ -303,7 +308,7 @@ export function createYakStore(
     subscribe,
 
     // Raw event stream for debugging
-    eventStream,
+    stream,
 
     // Debug access to internal state
     _debug: {
