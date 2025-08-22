@@ -177,6 +177,34 @@ async fn stream_existing_events(app: AppHandle, store: Store) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match initialize_store(&app_handle).await {
+                    Ok(store) => {
+                        app_handle.manage(store);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to initialize store: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            append_event,
+            get_cas_content,
+            log_message
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,7 +217,7 @@ mod tests {
         let store = Arc::new(Mutex::new(store));
 
         // Test appending an event
-        let request = AppendRequest {
+        let _request = AppendRequest {
             topic: "test.topic".to_string(),
             content: "test content".to_string(),
             meta: None,
@@ -220,32 +248,4 @@ mod tests {
         assert_eq!(appended.topic, "test.topic");
         assert!(appended.hash.is_some());
     }
-}
-
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                match initialize_store(&app_handle).await {
-                    Ok(store) => {
-                        app_handle.manage(store);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to initialize store: {e}");
-                        std::process::exit(1);
-                    }
-                }
-            });
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            append_event,
-            get_cas_content,
-            log_message
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
 }

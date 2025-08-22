@@ -12,7 +12,7 @@
     "test:backend": "cargo test --manifest-path src-tauri/Cargo.toml",
     "lint": "npm run lint:ui && npm run lint:backend",
     "lint:ui": "eslint src/ --ext .ts,.tsx",
-    "lint:backend": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "lint:backend": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
     "lint:fix": "npm run lint:ui:fix && npm run lint:backend:fix",
     "lint:ui:fix": "eslint src/ --ext .ts,.tsx --fix",
     "lint:backend:fix": "cargo clippy --manifest-path src-tauri/Cargo.toml --fix -- -D warnings",
