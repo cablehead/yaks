@@ -6,6 +6,7 @@ import type { EventStreamInterface, Frame } from './types';
 // Mock event stream for testing
 class MockEventStream implements EventStreamInterface {
   private frameCallback: ((frame: Frame) => void) | null = null;
+  private casContent: Record<string, string> = {};
 
   async appendEvent(request: any): Promise<string> {
     // Simulate backend behavior
@@ -25,7 +26,7 @@ class MockEventStream implements EventStreamInterface {
   }
 
   async getCasContent(hash: string): Promise<string> {
-    return Promise.resolve('mock content for ' + hash);
+    return Promise.resolve(this.casContent[hash] || 'mock content for ' + hash);
   }
 
   onFrame(callback: (frame: Frame) => void): () => void {
@@ -38,6 +39,10 @@ class MockEventStream implements EventStreamInterface {
   // Helper method to simulate receiving frames
   simulateFrame(frame: Frame) {
     if (this.frameCallback) {
+      // Store content for hash if provided
+      if (frame.hash) {
+        this.casContent[frame.hash] = `content for ${frame.id}`;
+      }
       this.frameCallback(frame);
     }
   }
@@ -191,6 +196,77 @@ describe('Yak Store', () => {
           mockEventStream.simulateFrame(yakFrame);
           setTimeout(checkYakThenNote, 10);
         }, 50);
+      });
+    });
+  });
+
+  it('should update selectedNoteId when editing a note', async () => {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Test timeout')), 1000);
+
+      createRoot(async () => {
+        const mockEventStream = new MockEventStream();
+        const store = createYakStore(mockEventStream);
+
+        try {
+          // Create a yak
+          const yakFrame: Frame = {
+            id: 'test-yak-id',
+            topic: 'yak.create',
+            context_id: '0000000000000000000000000',
+            hash: null,
+            meta: null,
+          };
+          mockEventStream.simulateFrame(yakFrame);
+
+          // Wait a bit for yak processing
+          await new Promise(r => setTimeout(r, 50));
+
+          // Create a note
+          const noteFrame: Frame = {
+            id: 'original-note-id',
+            topic: 'note.create',
+            context_id: '0000000000000000000000000',
+            hash: 'original-hash',
+            meta: { yak_id: 'test-yak-id' },
+          };
+          mockEventStream.simulateFrame(noteFrame);
+
+          // Wait for note processing
+          await new Promise(r => setTimeout(r, 100));
+
+          // Select the original note
+          store.setSelectedNoteId('original-note-id');
+
+          // Verify the note is selected
+          expect(store.selectedNoteId()).toBe('original-note-id');
+
+          // Edit the note
+          const editFrame: Frame = {
+            id: 'edited-note-id',
+            topic: 'note.edit',
+            context_id: '0000000000000000000000000',
+            hash: 'edited-hash',
+            meta: { yak_id: 'test-yak-id', note_id: 'original-note-id' },
+          };
+          mockEventStream.simulateFrame(editFrame);
+
+          // Wait for edit processing
+          await new Promise(r => setTimeout(r, 100));
+
+          // BUG: The selectedNoteId should be updated to the new note ID
+          // but it's still pointing to the old one
+          const currentSelectedId = store.selectedNoteId();
+
+          // This assertion should pass but will fail due to the bug
+          expect(currentSelectedId).toBe('edited-note-id');
+
+          clearTimeout(timeout);
+          resolve();
+        } catch (error) {
+          clearTimeout(timeout);
+          reject(error);
+        }
       });
     });
   });

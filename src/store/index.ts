@@ -144,6 +144,9 @@ export function createYakStore(
 
       // Get content from CAS
       if (frame.hash) {
+        // Capture current selectedNoteId before async operation
+        const currentSelectedId = selectedNoteId();
+
         eventStream.getCasContent(frame.hash).then(content => {
           const note: Note = {
             id: frame.id,
@@ -155,15 +158,27 @@ export function createYakStore(
             editedNoteId: originalNoteId,
           };
 
-          setState('notes', frame.id, note);
+          batch(() => {
+            setState('notes', frame.id, note);
 
-          // Replace the old note ID with the new one in the yak's notes list
-          setState('notesByYak', yakId, notes =>
-            notes.map(id => (id === originalNoteId ? frame.id : id))
-          );
+            // Replace the old note ID with the new one in the yak's notes list
+            setState('notesByYak', yakId, notes =>
+              notes.map(id => (id === originalNoteId ? frame.id : id))
+            );
 
-          // Update yak's last activity
-          setState('yaks', yakId, 'lastActivity', scru128ToTimestamp(frame.id));
+            // Update selectedNoteId if it was pointing to the old note
+            if (currentSelectedId === originalNoteId) {
+              setSelectedNoteId(frame.id);
+            }
+
+            // Update yak's last activity
+            setState(
+              'yaks',
+              yakId,
+              'lastActivity',
+              scru128ToTimestamp(frame.id)
+            );
+          });
         });
       }
     }
