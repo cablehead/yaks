@@ -167,7 +167,7 @@ describe('Yak Store', () => {
                 return;
               } catch {
                 clearTimeout(timeout);
-                reject(error);
+                reject(new Error('Store test failed'));
                 return;
               }
             }

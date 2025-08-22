@@ -29,7 +29,7 @@ async fn append_event(
             store
                 .cas_insert(&request.content.into_bytes())
                 .await
-                .map_err(|e| format!("Failed to insert content: {}", e))?,
+                .map_err(|e| format!("Failed to insert content: {e}"))?,
         )
     } else {
         None
@@ -51,11 +51,11 @@ async fn append_event(
 
     let appended_frame = store
         .append(frame)
-        .map_err(|e| format!("Failed to append frame: {}", e))?;
+        .map_err(|e| format!("Failed to append frame: {e}"))?;
 
     // Emit the frame to frontend via Tauri events
     app.emit("frame", &appended_frame)
-        .map_err(|e| format!("Failed to emit frame: {}", e))?;
+        .map_err(|e| format!("Failed to emit frame: {e}"))?;
 
     Ok(frame_id.to_string())
 }
@@ -66,22 +66,22 @@ async fn get_cas_content(store: State<'_, Store>, hash: String) -> Result<String
 
     let integrity = hash
         .parse::<ssri::Integrity>()
-        .map_err(|e| format!("Invalid hash format: {}", e))?;
+        .map_err(|e| format!("Invalid hash format: {e}"))?;
 
     let content = store
         .cas_read(&integrity)
         .await
-        .map_err(|e| format!("Failed to read content: {}", e))?;
+        .map_err(|e| format!("Failed to read content: {e}"))?;
 
-    String::from_utf8(content).map_err(|e| format!("Invalid UTF-8 content: {}", e))
+    String::from_utf8(content).map_err(|e| format!("Invalid UTF-8 content: {e}"))
 }
 
 #[tauri::command]
 fn log_message(level: String, message: String) {
     match level.as_str() {
-        "error" => eprintln!("[FRONTEND ERROR] {}", message),
-        "warn" => eprintln!("[FRONTEND WARN] {}", message),
-        _ => println!("[FRONTEND LOG] {}", message),
+        "error" => eprintln!("[FRONTEND ERROR] {message}"),
+        "warn" => eprintln!("[FRONTEND WARN] {message}"),
+        _ => println!("[FRONTEND LOG] {message}"),
     }
 }
 
@@ -124,16 +124,16 @@ async fn initialize_store(app: &AppHandle) -> Result<Store> {
             ttl: None,
         };
 
-        println!("Creating yak frame: {:?}", yak_frame);
+        println!("Creating yak frame: {yak_frame:?}");
         let appended_yak = store_lock
             .append(yak_frame)
             .map_err(|e| anyhow::anyhow!("Failed to append yak: {}", e))?;
 
-        println!("Yak appended successfully: {:?}", appended_yak);
+        println!("Yak appended successfully: {appended_yak:?}");
 
         // Emit to frontend
         app.emit("frame", &appended_yak).unwrap_or_else(|e| {
-            eprintln!("Failed to emit initial yak frame: {}", e);
+            eprintln!("Failed to emit initial yak frame: {e}");
         });
 
         println!("Yak frame emitted to frontend");
@@ -150,7 +150,7 @@ async fn initialize_store(app: &AppHandle) -> Result<Store> {
         // Give frontend time to set up listeners
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         if let Err(e) = stream_existing_events(app_clone, store_clone).await {
-            eprintln!("Failed to stream existing events: {}", e);
+            eprintln!("Failed to stream existing events: {e}");
         }
     });
 
@@ -169,11 +169,11 @@ async fn stream_existing_events(app: AppHandle, store: Store) -> Result<()> {
     let mut count = 0;
     while let Some(frame) = rx.recv().await {
         count += 1;
-        println!("Streaming frame {}: {:?}", count, frame);
+        println!("Streaming frame {count}: {frame:?}");
         app.emit("frame", &frame)?;
     }
 
-    println!("Finished streaming {} existing events", count);
+    println!("Finished streaming {count} existing events");
     Ok(())
 }
 
@@ -234,7 +234,7 @@ pub fn run() {
                         app_handle.manage(store);
                     }
                     Err(e) => {
-                        eprintln!("Failed to initialize store: {}", e);
+                        eprintln!("Failed to initialize store: {e}");
                         std::process::exit(1);
                     }
                 }

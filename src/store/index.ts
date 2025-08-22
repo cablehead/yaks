@@ -1,6 +1,6 @@
 import { createStore } from 'solid-js/store';
 import { createSignal, createMemo, onCleanup, batch } from 'solid-js';
-import { scru128 } from 'scru128';
+import { Scru128Id } from 'scru128';
 import type { EventStreamInterface, Frame } from './types';
 import { TauriEventStream } from './tauri'; // This imports the console override
 
@@ -30,7 +30,7 @@ interface StoreState {
 // Extract human-friendly timestamp from SCRU128 ID
 function scru128ToTimestamp(id: string): string {
   try {
-    const parsed = scru128.fromString(id);
+    const parsed = Scru128Id.fromString(id);
     return new Date(parsed.timestamp).toISOString();
   } catch {
     return new Date().toISOString();
@@ -39,7 +39,7 @@ function scru128ToTimestamp(id: string): string {
 
 function scru128ToHumanTime(id: string): string {
   try {
-    const parsed = scru128.fromString(id);
+    const parsed = Scru128Id.fromString(id);
     const date = new Date(parsed.timestamp);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
